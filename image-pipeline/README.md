@@ -196,47 +196,6 @@ npm run preview      # 빌드된 애플리케이션 미리보기
 
 포트를 변경하려면 `package.json`의 스크립트를 수정하거나 환경 변수를 설정하세요.
 
-## 🚀 배포
-
-### 프로덕션 빌드
-
-```bash
-npm run build
-```
-
-빌드된 파일은 `dist/` 폴더에 생성됩니다.
-
-### 서버 배포
-
-1. 빌드된 정적 파일을 웹 서버에 배포
-2. 백엔드 프록시 서버를 별도로 배포 (Heroku, Railway, 등)
-3. 프론트엔드에서 프록시 서버 URL 설정
-
-## 📝 라이선스
-
-MIT License
-
-## 🤝 기여하기
-
-1. Fork 프로젝트
-2. Feature 브랜치 생성 (`git checkout -b feature/amazing-feature`)
-3. 변경사항 커밋 (`git commit -m 'Add amazing feature'`)
-4. 브랜치에 Push (`git push origin feature/amazing-feature`)
-5. Pull Request 생성
-
-## 📞 지원
-
-문제가 발생하거나 질문이 있으시면 이슈를 생성해 주세요.
-
-## 🔄 업데이트 로그
-
-### v1.0.0 (2025년 1월)
-- React + Vite로 완전히 재작성
-- 컴포넌트 기반 아키텍처
-- 실시간 비용 계산
-- 반응형 디자인 개선
-- TypeScript 지원 준비
-
 ---
 
 ⚠️ **주의사항**: OpenAI API 사용에는 비용이 발생합니다. 사용 전 반드시 OpenAI의 가격 정책을 확인하세요.
