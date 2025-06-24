@@ -77,6 +77,7 @@ function App() {
           setIsGenerating={setIsGenerating}
           onGenerationComplete={handleGenerationComplete}
           onError={handleError}
+          onSuccess={(message) => showMessage(message, 'success')}
         />
 
         <ImageResults 

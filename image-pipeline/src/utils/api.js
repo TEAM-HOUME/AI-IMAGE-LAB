@@ -165,6 +165,7 @@ export async function generateImage(apiKey, params) {
  * @returns {Promise<Object>} API 응답
  */
 export async function performInpainting(apiKey, params) {
+    console.log('🎨 [인페인팅] 시작 - API 호출 준비');
     const endpoint = '/api/images/edits';
     
     const formData = new FormData();
@@ -173,29 +174,82 @@ export async function performInpainting(apiKey, params) {
     formData.append('mask', params.mask, 'mask.png');
     formData.append('model', 'gpt-image-1'); // gpt-image-1만 인페인팅 지원
     formData.append('n', '1');
-    formData.append('size', '1024x1024');
+    
+    // 크기와 품질 파라미터 추가
+    formData.append('size', params.size || '1024x1024');
+    formData.append('quality', params.quality || 'medium');
 
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`
-        },
-        body: formData
+    console.log('📝 [인페인팅] 요청 파라미터:', {
+        prompt: params.prompt,
+        size: params.size || '1024x1024',
+        quality: params.quality || 'medium',
+        imageSize: params.image.size,
+        maskSize: params.mask.size
     });
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
+    console.log('🚀 [인페인팅] 서버로 요청 전송 시작...');
     
-    // gpt-image-1의 b64_json 응답을 통일된 형식으로 변환
-    if (result.data) {
-        result.data = normalizeImageResponse(result.data);
-    }
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: formData
+        });
 
-    return result;
+        console.log('📡 [인페인팅] 서버 응답 받음:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok
+        });
+
+        if (!response.ok) {
+            console.error('❌ [인페인팅] HTTP 에러 발생');
+            let errorData;
+            try {
+                errorData = await response.json();
+                console.error('❌ [인페인팅] 에러 데이터:', errorData);
+            } catch (parseError) {
+                console.error('❌ [인페인팅] 에러 응답 파싱 실패:', parseError);
+                errorData = { error: { message: `HTTP ${response.status}: 응답 파싱 실패` } };
+            }
+            
+            console.error('❌ [인페인팅] API 오류 상세:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorData
+            });
+            throw new Error(errorData.error?.message || `HTTP ${response.status}: 인페인팅 요청이 실패했습니다.`);
+        }
+
+        console.log('📊 [인페인팅] 응답 데이터 파싱 시작...');
+        const result = await response.json();
+        
+        console.log('✅ [인페인팅] 성공:', {
+            imageCount: result.data?.length || 0,
+            usage: result.usage,
+            created: result.created
+        });
+        
+        // gpt-image-1의 b64_json 응답을 통일된 형식으로 변환
+        if (result.data) {
+            console.log('🔄 [인페인팅] 이미지 데이터 정규화 중...');
+            result.data = normalizeImageResponse(result.data);
+            console.log('✅ [인페인팅] 이미지 데이터 정규화 완료');
+        }
+
+        console.log('🎉 [인페인팅] 전체 프로세스 완료!');
+        return result;
+        
+    } catch (error) {
+        console.error('💥 [인페인팅] fetch 오류 발생:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        throw error;
+    }
 }
 
 /**
@@ -244,7 +298,7 @@ export function canvasToBlob(canvas, originalImageData, type) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
+            const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
             
             if (originalImageData) {
                 tempCtx.putImageData(originalImageData, 0, 0);
@@ -252,28 +306,35 @@ export function canvasToBlob(canvas, originalImageData, type) {
             
             tempCanvas.toBlob(resolve, 'image/png');
         } else {
-            // 마스크만 추출 (흰색 부분만)
+            // 마스크만 추출 (흰색 브러시 부분을 투명하게)
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
+            const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
             
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
             
-            // 마스크 생성 (흰색 브러시 부분만 투명하게)
+            // 마스크 생성 - 개선된 로직
             for (let i = 0; i < data.length; i += 4) {
-                const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const brightness = (r + g + b) / 3;
+                
                 if (brightness > 128) {
-                    // 밝은 부분 (브러시 부분) -> 투명
-                    data[i + 3] = 0;
+                    // 밝은 부분 (브러시 부분) -> 완전 투명 (편집될 영역)
+                    data[i] = 0;     // R
+                    data[i + 1] = 0; // G
+                    data[i + 2] = 0; // B
+                    data[i + 3] = 0; // A (투명)
                 } else {
-                    // 어두운 부분 -> 불투명 검정
-                    data[i] = 0;
-                    data[i + 1] = 0;
-                    data[i + 2] = 0;
-                    data[i + 3] = 255;
+                    // 어두운 부분 -> 완전 불투명 검정 (보존될 영역)
+                    data[i] = 0;     // R
+                    data[i + 1] = 0; // G
+                    data[i + 2] = 0; // B
+                    data[i + 3] = 255; // A (불투명)
                 }
             }
             
@@ -295,7 +356,7 @@ export function loadImageToCanvas(file, canvas) {
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                const ctx = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
                 // 캔버스 크기에 맞게 이미지 조정
                 const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
@@ -339,7 +400,7 @@ export function loadImageUrlToCanvas(imageUrl, canvas) {
         }
         
         img.onload = () => {
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
             
             // 캔버스 크기에 맞게 이미지 조정
             const scale = Math.min(canvas.width / img.width, canvas.height / img.height);

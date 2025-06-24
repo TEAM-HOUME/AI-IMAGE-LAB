@@ -71,47 +71,84 @@ app.post('/api/images/edits', upload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'mask', maxCount: 1 }
 ]), async (req, res) => {
+    console.log('🎨 [서버] 인페인팅 요청 받음');
+    
     try {
         const { authorization } = req.headers;
         const apiKey = authorization?.replace('Bearer ', '');
 
+        console.log('🔑 [서버] API 키 검증 중...');
         if (!apiKey) {
+            console.error('❌ [서버] API 키 없음');
             return res.status(401).json({ error: 'API 키가 필요합니다.' });
         }
+        console.log('✅ [서버] API 키 확인됨');
 
+        console.log('📁 [서버] 파일 검증 중...');
         if (!req.files.image || !req.files.mask) {
+            console.error('❌ [서버] 필수 파일 누락:', {
+                hasImage: !!req.files.image,
+                hasMask: !!req.files.mask
+            });
             return res.status(400).json({ 
                 error: { 
                     message: '이미지와 마스크 파일이 모두 필요합니다.' 
                 } 
             });
         }
+        console.log('✅ [서버] 파일 확인됨');
 
-        console.log('인페인팅 요청:', {
+        // 파일 크기 체크 (gpt-image-1은 최대 50MB)
+        console.log('📏 [서버] 파일 크기 검증 중...');
+        const maxFileSize = 50 * 1024 * 1024; // 50MB
+        if (req.files.image[0].size > maxFileSize || req.files.mask[0].size > maxFileSize) {
+            console.error('❌ [서버] 파일 크기 초과:', {
+                imageSize: req.files.image[0].size,
+                maskSize: req.files.mask[0].size,
+                maxSize: maxFileSize
+            });
+            return res.status(400).json({
+                error: {
+                    message: '파일 크기가 너무 큽니다. 최대 50MB까지 지원됩니다.'
+                }
+            });
+        }
+        console.log('✅ [서버] 파일 크기 확인됨');
+
+        console.log('📝 [서버] 인페인팅 요청 상세:', {
             prompt: req.body.prompt,
             model: req.body.model,
             size: req.body.size,
+            quality: req.body.quality,
             imageSize: req.files.image[0].size,
-            maskSize: req.files.mask[0].size
+            maskSize: req.files.mask[0].size,
+            imageType: req.files.image[0].mimetype,
+            maskType: req.files.mask[0].mimetype
         });
 
         // FormData 생성
+        console.log('📦 [서버] FormData 생성 중...');
         const formData = new FormData();
         formData.append('prompt', req.body.prompt);
         formData.append('model', req.body.model || 'gpt-image-1');
         formData.append('n', req.body.n || '1');
         formData.append('size', req.body.size || '1024x1024');
+        formData.append('quality', req.body.quality || 'medium');
         
         // 이미지 파일들 추가
         formData.append('image', req.files.image[0].buffer, {
             filename: 'image.png',
-            contentType: 'image/png'
+            contentType: req.files.image[0].mimetype || 'image/png'
         });
         formData.append('mask', req.files.mask[0].buffer, {
             filename: 'mask.png',
-            contentType: 'image/png'
+            contentType: req.files.mask[0].mimetype || 'image/png'
         });
+        console.log('✅ [서버] FormData 생성 완료');
 
+        console.log('🚀 [서버] OpenAI API 호출 시작...');
+        const startTime = Date.now();
+        
         const response = await fetch('https://api.openai.com/v1/images/edits', {
             method: 'POST',
             headers: {
@@ -121,18 +158,46 @@ app.post('/api/images/edits', upload.fields([
             body: formData
         });
 
+        const endTime = Date.now();
+        console.log('📡 [서버] OpenAI API 응답 받음:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            duration: `${endTime - startTime}ms`
+        });
+
+        console.log('📊 [서버] 응답 데이터 파싱 중...');
         const data = await response.json();
+        console.log('✅ [서버] 응답 데이터 파싱 완료');
 
         if (!response.ok) {
-            console.error('OpenAI 인페인팅 API 오류:', data);
+            console.error('❌ [서버] OpenAI 인페인팅 API 오류:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: data,
+                requestSize: req.body.size,
+                requestQuality: req.body.quality
+            });
             return res.status(response.status).json(data);
         }
 
-        console.log('인페인팅 성공:', data.data?.length, '개 이미지');
+        console.log('🎉 [서버] 인페인팅 성공:', {
+            imageCount: data.data?.length || 0,
+            usage: data.usage,
+            created: data.created
+        });
+        
+        console.log('📤 [서버] 클라이언트로 응답 전송 중...');
         res.json(data);
+        console.log('✅ [서버] 응답 전송 완료');
 
     } catch (error) {
-        console.error('인페인팅 프록시 서버 오류:', error);
+        console.error('💥 [서버] 인페인팅 프록시 서버 오류:', {
+            message: error.message,
+            stack: error.stack,
+            requestBody: req.body,
+            files: req.files ? Object.keys(req.files) : 'none'
+        });
         res.status(500).json({ 
             error: { 
                 message: `인페인팅 서버 내부 오류: ${error.message}` 

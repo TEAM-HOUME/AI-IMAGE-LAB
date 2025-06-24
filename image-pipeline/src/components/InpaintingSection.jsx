@@ -6,15 +6,24 @@ function InpaintingSection({
   isGenerating, 
   setIsGenerating, 
   onGenerationComplete, 
-  onError 
+  onError,
+  onSuccess 
 }) {
   const [inpaintPrompt, setInpaintPrompt] = useState('')
   const [brushSize, setBrushSize] = useState(20)
   const [originalImageData, setOriginalImageData] = useState(null)
   const [isDrawing, setIsDrawing] = useState(false)
   
+  // gpt-image-1 전용 파라미터 추가
+  const [size, setSize] = useState('1024x1024')
+  const [quality, setQuality] = useState('medium')
+  
   const canvasRef = useRef(null)
   const fileInputRef = useRef(null)
+
+  // gpt-image-1 지원 옵션들
+  const SUPPORTED_SIZES = ['1024x1024', '1536x1024', '1024x1536', 'auto']
+  const SUPPORTED_QUALITIES = ['auto', 'low', 'medium', 'high']
 
   // 캔버스 초기화
   useEffect(() => {
@@ -29,7 +38,7 @@ function InpaintingSection({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     ctx.fillStyle = 'black'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     
@@ -46,10 +55,12 @@ function InpaintingSection({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const x = (e.clientX - rect.left) * scaleX
+    const y = (e.clientY - rect.top) * scaleY
     
     ctx.fillStyle = 'white'
     ctx.beginPath()
@@ -112,54 +123,87 @@ function InpaintingSection({
       const canvas = canvasRef.current
       const imageData = await loadImageToCanvas(file, canvas)
       setOriginalImageData(imageData)
-      onError({ message: '원본 이미지가 로드되었습니다.' })
+      
+      // 성공 메시지 표시
+      if (onSuccess) {
+        onSuccess('원본 이미지가 성공적으로 로드되었습니다.')
+      }
     } catch (error) {
+      console.error('이미지 로드 오류:', error)
       onError(new Error('이미지 로드에 실패했습니다.'))
     }
   }
 
   // 인페인팅 실행
   const handleInpainting = async () => {
+    console.log('🎨 [클라이언트] 인페인팅 실행 시작');
+    
     if (!apiKey) {
+      console.error('❌ [클라이언트] API 키 없음');
       onError(new Error('먼저 OpenAI API 키를 입력하고 저장해주세요.'))
       return
     }
 
     if (!originalImageData) {
+      console.error('❌ [클라이언트] 원본 이미지 없음');
       onError(new Error('먼저 원본 이미지를 업로드해주세요.'))
       return
     }
 
     if (!inpaintPrompt.trim()) {
+      console.error('❌ [클라이언트] 프롬프트 없음');
       onError(new Error('인페인팅 프롬프트를 입력해주세요.'))
       return
     }
 
-    if (isGenerating) return
+    if (isGenerating) {
+      console.warn('⚠️ [클라이언트] 이미 생성 중');
+      return;
+    }
 
+    console.log('✅ [클라이언트] 전제 조건 확인 완료');
     setIsGenerating(true)
 
     try {
+      console.log('📷 [클라이언트] 캔버스에서 이미지 데이터 추출 시작');
       const canvas = canvasRef.current
       
       // 원본 이미지와 마스크를 분리
+      console.log('🖼️ [클라이언트] 원본 이미지 Blob 생성 중...');
       const originalBlob = await canvasToBlob(canvas, originalImageData, 'original')
+      console.log('✅ [클라이언트] 원본 이미지 Blob 생성 완료:', originalBlob.size, 'bytes');
+      
+      console.log('🎭 [클라이언트] 마스크 Blob 생성 중...');
       const maskBlob = await canvasToBlob(canvas, originalImageData, 'mask')
+      console.log('✅ [클라이언트] 마스크 Blob 생성 완료:', maskBlob.size, 'bytes');
 
+      console.log('🚀 [클라이언트] API 호출 시작');
       const response = await performInpainting(apiKey, {
         prompt: inpaintPrompt.trim(),
         image: originalBlob,
-        mask: maskBlob
+        mask: maskBlob,
+        size: size,
+        quality: quality
       })
 
+      console.log('📡 [클라이언트] API 응답 받음:', response);
+
       if (response.data && response.data.length > 0) {
+        console.log('🎉 [클라이언트] 인페인팅 성공, 결과 전달');
         onGenerationComplete(response.data)
       } else {
+        console.error('❌ [클라이언트] 응답 데이터가 없음:', response);
         onError(new Error('인페인팅에 실패했습니다.'))
       }
     } catch (error) {
+      console.error('💥 [클라이언트] 인페인팅 오류:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       onError(error)
     } finally {
+      console.log('🏁 [클라이언트] 인페인팅 프로세스 종료');
       setIsGenerating(false)
     }
   }
@@ -200,6 +244,41 @@ function InpaintingSection({
             accept="image/*"
             onChange={handleImageUpload}
           />
+        </div>
+
+        <div className="settings-row">
+          <div className="input-group">
+            <label htmlFor="inpaintSize">이미지 크기:</label>
+            <select 
+              id="inpaintSize"
+              value={size}
+              onChange={(e) => setSize(e.target.value)}
+            >
+              {SUPPORTED_SIZES.map(sizeOption => (
+                <option key={sizeOption} value={sizeOption}>
+                  {sizeOption}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label htmlFor="inpaintQuality">품질:</label>
+            <select 
+              id="inpaintQuality"
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+            >
+              {SUPPORTED_QUALITIES.map(qualityOption => (
+                <option key={qualityOption} value={qualityOption}>
+                  {qualityOption === 'auto' ? '자동' :
+                   qualityOption === 'low' ? 'Low' :
+                   qualityOption === 'medium' ? 'Medium' :
+                   qualityOption === 'high' ? 'High' : qualityOption}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="input-group">
@@ -254,9 +333,10 @@ function InpaintingSection({
         <div className="inpainting-help">
           <p>💡 사용 방법:</p>
           <ul>
-            <li>원본 이미지를 업로드하세요</li>
+            <li>원본 이미지를 업로드하세요 (최대 50MB, PNG/JPEG/WebP 지원)</li>
             <li>수정하고 싶은 영역을 브러시로 칠하세요 (흰색 영역)</li>
             <li>해당 영역을 어떻게 바꿀지 프롬프트에 설명하세요</li>
+            <li>이미지 크기와 품질을 선택하세요</li>
             <li>gpt-image-1 모델만 인페인팅을 지원합니다</li>
           </ul>
         </div>
