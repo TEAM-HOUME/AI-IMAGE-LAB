@@ -1,0 +1,53 @@
+{
+  "name": "openai-image-generator",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "OpenAI 이미지 생성 도구 - DALL-E 2, 3, gpt-image-1을 사용한 이미지 생성 및 인페인팅",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "server": "node server.js",
+    "dev:server": "nodemon server.js",
+    "start": "concurrently \"npm run server\" \"npm run dev\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "form-data": "^4.0.0",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "nodemon": "^3.1.10",
+    "vite": "^5.4.10"
+  },
+  "keywords": [
+    "openai",
+    "dall-e",
+    "gpt-image-1",
+    "image-generation",
+    "inpainting",
+    "ai",
+    "react",
+    "vite"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
