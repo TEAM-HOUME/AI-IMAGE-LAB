@@ -376,44 +376,6 @@ function ImageGenerationSection({
       >
         {isGenerating ? '이미지 생성 중...' : '이미지 생성'}
       </button>
-
-      {/* 모델별 특징 안내 */}
-      <div className="model-info">
-        <h3>🔍 {model} 특징</h3>
-        {model === 'dall-e-2' && (
-          <ul>
-            <li>빠르고 경제적인 이미지 생성</li>
-            <li>이미지 편집 및 변형 지원</li>
-            <li>다양한 해상도 옵션</li>
-          </ul>
-        )}
-        {model === 'dall-e-3' && (
-          <ul>
-            <li>최고 품질의 이미지 생성</li>
-            <li>텍스트 포함 이미지 생성 우수</li>
-            <li>자연어 이해력 향상</li>
-            <li>생생함과 자연스러움 스타일 선택</li>
-          </ul>
-        )}
-        {model === 'gpt-image-1' && (
-          <ul>
-            <li>최신 모델, 최고 성능</li>
-            <li>투명 배경 지원</li>
-            <li>다양한 출력 포맷 (PNG, JPEG, WebP)</li>
-            <li>이미지 편집(인페인팅) 지원</li>
-            <li>압축 레벨 조절 가능</li>
-          </ul>
-        )}
-        {model === 'imagen-3' && (
-          <ul>
-            <li>Google의 최신 이미지 생성 모델</li>
-            <li>뛰어난 사실감과 디테일</li>
-            <li>다양한 스타일 지원 (사진, 일러스트, 예술적, 영화적)</li>
-            <li>높은 해상도 지원 (최대 1792x1024)</li>
-            <li>정확한 텍스트 렌더링</li>
-          </ul>
-        )}
-      </div>
     </section>
   )
 }
