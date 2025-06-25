@@ -201,6 +201,39 @@ button:hover {
   background: #218838;
 }
 
+.api-help {
+  margin-top: 20px;
+  padding: 15px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.api-help p {
+  margin: 0 0 10px 0;
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.api-help ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #424242;
+}
+
+.api-help li {
+  margin-bottom: 5px;
+}
+
+.api-help a {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.api-help a:hover {
+  text-decoration: underline;
+}
+
 /* Canvas and Inpainting */
 .canvas-container {
   margin: 20px 0;

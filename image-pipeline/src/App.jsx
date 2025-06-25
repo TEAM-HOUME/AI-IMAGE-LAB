@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import ApiKeySection from './components/ApiKeySection'
 import ImageGenerationSection from './components/ImageGenerationSection'
-import InpaintingSection from './components/InpaintingSection'
+// import InpaintingSection from './components/InpaintingSection'  // 임시 비활성화
 import ImageResults from './components/ImageResults'
 import LoadingSpinner from './components/LoadingSpinner'
 import Message from './components/Message'
 
 function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('openai_api_key') || '')
+  const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('google_api_key') || '')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImages, setGeneratedImages] = useState([])
   const [message, setMessage] = useState(null)
@@ -33,7 +34,19 @@ function App() {
 
     setApiKey(newApiKey)
     localStorage.setItem('openai_api_key', newApiKey)
-    showMessage('API 키가 저장되었습니다.', 'success')
+    showMessage('OpenAI API 키가 저장되었습니다.', 'success')
+  }
+
+  // Google API 키 저장
+  const handleSaveGoogleApiKey = (newApiKey) => {
+    if (!newApiKey) {
+      showMessage('Google API 키를 입력해주세요.', 'error')
+      return
+    }
+
+    setGoogleApiKey(newApiKey)
+    localStorage.setItem('google_api_key', newApiKey)
+    showMessage('Google API 키가 저장되었습니다.', 'success')
   }
 
   // 이미지 생성 완료 처리
@@ -52,25 +65,30 @@ function App() {
     <div className="app">
       <div className="container">
         <header className="app-header">
-          <h1>🎨 OpenAI 이미지 생성 도구</h1>
-          <p>DALL-E 2, DALL-E 3, gpt-image-1을 사용한 이미지 생성 및 인페인팅</p>
+          <h1>🎨 AI 이미지 생성 도구</h1>
+          <p>OpenAI (DALL-E 2, DALL-E 3, gpt-image-1) 및 Google Imagen 3를 사용한 이미지 생성</p>
         </header>
 
         {message && <Message message={message} />}
 
         <ApiKeySection 
           apiKey={apiKey}
+          googleApiKey={googleApiKey}
           onSaveApiKey={handleSaveApiKey}
+          onSaveGoogleApiKey={handleSaveGoogleApiKey}
         />
 
         <ImageGenerationSection 
           apiKey={apiKey}
+          googleApiKey={googleApiKey}
           isGenerating={isGenerating}
           setIsGenerating={setIsGenerating}
           onGenerationComplete={handleGenerationComplete}
           onError={handleError}
         />
 
+        {/* 인페인팅 섹션 임시 비활성화 */}
+        {/*
         <InpaintingSection 
           apiKey={apiKey}
           isGenerating={isGenerating}
@@ -79,13 +97,14 @@ function App() {
           onError={handleError}
           onSuccess={(message) => showMessage(message, 'success')}
         />
+        */}
 
         <ImageResults 
           images={generatedImages}
           onError={handleError}
           onUseForInpainting={(imageUrl) => {
             // 인페인팅 섹션으로 이미지 전달하는 로직은 별도 구현
-            showMessage('이미지가 인페인팅 캔버스에 로드되었습니다.', 'success')
+            showMessage('인페인팅 기능은 현재 비활성화되어 있습니다.', 'info')
           }}
         />
 

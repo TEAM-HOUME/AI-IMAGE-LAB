@@ -37,12 +37,34 @@ const PRICING = {
             medium: 0.063,
             high: 0.25
         }
+    },
+    'imagen-3': {
+        '1024x1024': {
+            standard: 0.035,
+            high: 0.070
+        },
+        '1024x1536': {
+            standard: 0.052,
+            high: 0.105
+        },
+        '1536x1024': {
+            standard: 0.052,
+            high: 0.105
+        },
+        '1792x1024': {
+            standard: 0.063,
+            high: 0.126
+        },
+        '1024x1792': {
+            standard: 0.063,
+            high: 0.126
+        }
     }
 };
 
 /**
  * 이미지 생성 비용을 계산합니다
- * @param {string} model - 모델명 (dall-e-2, dall-e-3, gpt-image-1)
+ * @param {string} model - 모델명 (dall-e-2, dall-e-3, gpt-image-1, imagen-3)
  * @param {string} size - 이미지 크기 (예: 1024x1024)
  * @param {string} quality - 품질 (standard, hd, low, medium, high)
  * @param {number} numImages - 이미지 개수
@@ -60,7 +82,7 @@ export function calculateImageCost(model, size, quality, numImages = 1) {
 
     if (model === 'dall-e-2') {
         unitCost = pricing[size] || 0;
-    } else if (model === 'dall-e-3') {
+    } else if (model === 'dall-e-3' || model === 'imagen-3') {
         const sizeInfo = pricing[size];
         if (sizeInfo) {
             if (typeof sizeInfo === 'object') {
@@ -106,7 +128,7 @@ export function getSupportedQualities(model, size) {
     
     if (model === 'dall-e-2') {
         return ['standard'];
-    } else if (model === 'dall-e-3') {
+    } else if (model === 'dall-e-3' || model === 'imagen-3') {
         if (typeof sizeInfo === 'object') {
             return Object.keys(sizeInfo);
         }
@@ -148,6 +170,11 @@ export function getRecommendedSettings(model) {
             size: '1024x1024',
             quality: 'medium',
             description: '최신 모델, 인페인팅 지원'
+        },
+        'imagen-3': {
+            size: '1024x1024',
+            quality: 'standard',
+            description: 'Google의 고품질 이미지 생성'
         }
     };
     
@@ -160,7 +187,7 @@ export function getRecommendedSettings(model) {
 export const QUALITY_NAMES = {
     'standard': '표준',
     'hd': 'HD',
+    'high': '고품질',
     'low': 'Low',
-    'medium': 'Medium',
-    'high': 'High'
+    'medium': 'Medium'
 }; 

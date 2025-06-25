@@ -12,7 +12,8 @@ const MODEL_CONFIGS = {
     outputFormats: [],
     responseFormats: ['url', 'b64_json'],
     supportsCompression: false,
-    maxImages: 10
+    maxImages: 10,
+    provider: 'openai'
   },
   'dall-e-3': {
     sizes: ['1024x1024', '1792x1024', '1024x1792'],
@@ -22,7 +23,8 @@ const MODEL_CONFIGS = {
     outputFormats: [],
     responseFormats: ['url', 'b64_json'],
     supportsCompression: false,
-    maxImages: 10 // 병렬 호출로 구현
+    maxImages: 10, // 병렬 호출로 구현
+    provider: 'openai'
   },
   'gpt-image-1': {
     sizes: ['1024x1024', '1536x1024', '1024x1536', 'auto'],
@@ -32,7 +34,19 @@ const MODEL_CONFIGS = {
     outputFormats: ['png', 'jpeg', 'webp'],
     responseFormats: ['b64_json'], // 고정
     supportsCompression: true,
-    maxImages: 10
+    maxImages: 10,
+    provider: 'openai'
+  },
+  'imagen-3': {
+    sizes: ['1024x1024', '1792x1024', '1024x1792', '1536x864', '864x1536'],
+    qualities: ['standard', 'high'],
+    styles: ['photographic', 'illustration', 'artistic', 'cinematic'],
+    backgrounds: [],
+    outputFormats: ['png', 'jpeg'],
+    responseFormats: ['b64_json'], // Google은 주로 base64 응답
+    supportsCompression: false,
+    maxImages: 4,
+    provider: 'google'
   }
 }
 
@@ -41,14 +55,18 @@ const PARAMETER_NAMES = {
   qualities: {
     'standard': '표준',
     'hd': 'HD',
+    'high': '고품질',
     'auto': '자동',
     'low': 'Low',
-    'medium': 'Medium', 
-    'high': 'High'
+    'medium': 'Medium'
   },
   styles: {
     'vivid': '생생한',
-    'natural': '자연스러운'
+    'natural': '자연스러운',
+    'photographic': '사진',
+    'illustration': '일러스트',
+    'artistic': '예술적',
+    'cinematic': '영화적'
   },
   backgrounds: {
     'transparent': '투명',
@@ -68,6 +86,7 @@ const PARAMETER_NAMES = {
 
 function ImageGenerationSection({ 
   apiKey, 
+  googleApiKey,
   isGenerating, 
   setIsGenerating, 
   onGenerationComplete, 
@@ -109,8 +128,11 @@ function ImageGenerationSection({
 
   // 이미지 생성 처리
   const handleGenerate = async () => {
-    if (!apiKey) {
-      onError(new Error('먼저 OpenAI API 키를 입력하고 저장해주세요.'))
+    const requiredApiKey = currentConfig.provider === 'google' ? googleApiKey : apiKey
+    
+    if (!requiredApiKey) {
+      const providerName = currentConfig.provider === 'google' ? 'Google' : 'OpenAI'
+      onError(new Error(`먼저 ${providerName} API 키를 입력하고 저장해주세요.`))
       return
     }
 
@@ -129,7 +151,8 @@ function ImageGenerationSection({
         prompt: prompt.trim(),
         size,
         quality,
-        numImages
+        numImages,
+        provider: currentConfig.provider
       }
 
       // 모델별 추가 파라미터
@@ -141,11 +164,15 @@ function ImageGenerationSection({
         if (outputFormat) params.outputFormat = outputFormat
         if (currentConfig.supportsCompression) params.outputCompression = outputCompression
       }
+      if (model === 'imagen-3' && style) {
+        params.style = style
+        if (outputFormat) params.outputFormat = outputFormat
+      }
       if ((model === 'dall-e-2' || model === 'dall-e-3') && responseFormat) {
         params.responseFormat = responseFormat
       }
 
-      const response = await generateImage(apiKey, params)
+      const response = await generateImage(requiredApiKey, params)
 
       if (response.data && response.data.length > 0) {
         onGenerationComplete(response.data)
@@ -187,9 +214,14 @@ function ImageGenerationSection({
             value={model}
             onChange={(e) => handleModelChange(e.target.value)}
           >
-            <option value="gpt-image-1">gpt-image-1 (최신)</option>
-            <option value="dall-e-3">DALL-E 3</option>
-            <option value="dall-e-2">DALL-E 2</option>
+            <optgroup label="OpenAI">
+              <option value="gpt-image-1">gpt-image-1 (최신)</option>
+              <option value="dall-e-3">DALL-E 3</option>
+              <option value="dall-e-2">DALL-E 2</option>
+            </optgroup>
+            <optgroup label="Google">
+              <option value="imagen-3">Imagen 3</option>
+            </optgroup>
           </select>
         </div>
 
@@ -243,7 +275,7 @@ function ImageGenerationSection({
           </select>
         </div>
 
-        {/* 스타일 (DALL-E 3만) */}
+        {/* 스타일 (DALL-E 3, Imagen 3) */}
         {currentConfig.styles.length > 0 && (
           <div className="input-group">
             <label htmlFor="style">스타일:</label>
@@ -279,7 +311,7 @@ function ImageGenerationSection({
           </div>
         )}
 
-        {/* 출력 포맷 (gpt-image-1만) */}
+        {/* 출력 포맷 (gpt-image-1, Imagen 3) */}
         {currentConfig.outputFormats.length > 0 && (
           <div className="input-group">
             <label htmlFor="outputFormat">출력 포맷:</label>
@@ -339,7 +371,7 @@ function ImageGenerationSection({
       {/* 생성 버튼 */}
       <button 
         onClick={handleGenerate}
-        disabled={isGenerating || !apiKey || !prompt.trim()}
+        disabled={isGenerating || (!apiKey && currentConfig.provider === 'openai') || (!googleApiKey && currentConfig.provider === 'google') || !prompt.trim()}
         className="primary-btn"
       >
         {isGenerating ? '이미지 생성 중...' : '이미지 생성'}
@@ -370,6 +402,15 @@ function ImageGenerationSection({
             <li>다양한 출력 포맷 (PNG, JPEG, WebP)</li>
             <li>이미지 편집(인페인팅) 지원</li>
             <li>압축 레벨 조절 가능</li>
+          </ul>
+        )}
+        {model === 'imagen-3' && (
+          <ul>
+            <li>Google의 최신 이미지 생성 모델</li>
+            <li>뛰어난 사실감과 디테일</li>
+            <li>다양한 스타일 지원 (사진, 일러스트, 예술적, 영화적)</li>
+            <li>높은 해상도 지원 (최대 1792x1024)</li>
+            <li>정확한 텍스트 렌더링</li>
           </ul>
         )}
       </div>

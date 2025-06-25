@@ -30,11 +30,129 @@ export function normalizeImageResponse(responseData) {
 }
 
 /**
- * 이미지 생성 API 호출
+ * Google 모델 목록 조회
+ * @param {string} apiKey - Google API 키
+ * @returns {Promise<Object>} API 응답
+ */
+export async function listGoogleModels(apiKey) {
+    const endpoint = `/api/google/models`;
+
+    console.log('Google 모델 목록 조회 시작');
+
+    const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Google 모델 목록 조회 오류:', errorData);
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Google 모델 목록 조회 성공:', result);
+    
+    return result;
+}
+
+/**
+ * Google Imagen3 API 호출
+ * @param {string} apiKey - Google API 키
+ * @param {Object} params - 이미지 생성 파라미터
+ * @returns {Promise<Object>} API 응답
+ */
+export async function generateImageWithGoogle(apiKey, params) {
+    const endpoint = `/api/google/images/generate`;
+    
+    const requestBody = {
+        prompt: params.prompt,
+        config: {
+            number_of_images: params.numImages || 1
+        }
+    };
+
+    // 크기 설정 (aspect_ratio 형식으로 변경)
+    if (params.size && params.size !== 'auto') {
+        const [width, height] = params.size.split('x').map(Number);
+        
+        // 비율 계산하여 aspect_ratio 설정
+        let aspectRatio = '1:1'; // 기본값
+        if (width === height) {
+            aspectRatio = '1:1';
+        } else if (width > height) {
+            const ratio = Math.round((width / height) * 10) / 10;
+            if (ratio >= 1.7 && ratio <= 1.8) {
+                aspectRatio = '16:9';
+            } else if (ratio >= 1.4 && ratio <= 1.6) {
+                aspectRatio = '3:2';
+            }
+        } else if (height > width) {
+            const ratio = Math.round((height / width) * 10) / 10;
+            if (ratio >= 1.7 && ratio <= 1.8) {
+                aspectRatio = '9:16';
+            } else if (ratio >= 1.4 && ratio <= 1.6) {
+                aspectRatio = '2:3';
+            }
+        }
+        
+        requestBody.config.aspect_ratio = aspectRatio;
+    }
+
+    // 품질 설정 (Google Imagen3에서는 다른 파라미터명 사용할 수 있음)
+    if (params.quality && params.quality !== 'standard') {
+        // Google Imagen3의 품질 파라미터는 문서에 따라 다를 수 있음
+        requestBody.config.quality = params.quality;
+    }
+
+    // 스타일 설정 (Google Imagen3의 스타일 파라미터)
+    if (params.style) {
+        requestBody.config.style = params.style;
+    }
+
+    console.log('Google Imagen3 API 요청:', requestBody);
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Google Imagen3 API 오류:', errorData);
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Google Imagen3 API 성공:', result);
+
+    // 서버에서 이미 OpenAI 형식으로 변환된 데이터가 옴
+    return {
+        data: result.data || [],
+        created: Date.now(),
+        usage: result.usage || undefined
+    };
+}
+
+/**
+ * 이미지 생성 API 호출 (통합)
  * @param {Object} params - 이미지 생성 파라미터
  * @returns {Promise<Object>} API 응답
  */
 export async function generateImage(apiKey, params) {
+    // Google Imagen3 처리
+    if (params.provider === 'google' || params.model === 'imagen-3') {
+        return await generateImageWithGoogle(apiKey, params);
+    }
+
+    // OpenAI API 처리 (기존 로직)
     const endpoint = '/api/images/generations';
     
     const requestBody = {
@@ -264,6 +382,17 @@ export async function downloadImage(url, filename) {
     }
 
     console.log('이미지 다운로드 시도:', url);
+
+    // data URI인 경우 직접 다운로드
+    if (url.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+    }
 
     // 프록시를 통해 이미지 다운로드 (CORS 해결)
     const proxyUrl = `/api/download-image?url=${encodeURIComponent(url)}`;

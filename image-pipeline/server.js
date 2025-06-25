@@ -3,6 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 const PORT = process.env.PORT || 3001; // Changed to 3001 to avoid conflict
@@ -14,7 +15,119 @@ app.use(express.json());
 // Multer 설정 (인페인팅용 파일 업로드)
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 이미지 생성 프록시
+// Google 모델 목록 조회 API
+app.get('/api/google/models', async (req, res) => {
+    try {
+        const { authorization } = req.headers;
+        const apiKey = authorization?.replace('Bearer ', '');
+
+        if (!apiKey) {
+            return res.status(401).json({ error: 'Google API 키가 필요합니다.' });
+        }
+
+        console.log('Google 모델 목록 조회 요청');
+
+        // GoogleGenAI 클라이언트 생성
+        const genAI = new GoogleGenAI({ apiKey: apiKey });
+
+        // 모델 목록 조회
+        const modelsList = await genAI.models.list();
+
+        // Iterator를 배열로 변환
+        const modelsArray = [];
+        for await (const model of modelsList) {
+            modelsArray.push(model);
+        }
+
+        console.log('Google 모델 목록 조회 성공:', modelsArray.length, '개 모델');
+        
+        res.json({
+            models: modelsArray,
+            count: modelsArray.length
+        });
+
+    } catch (error) {
+        console.error('Google 모델 목록 조회 오류:', error);
+        res.status(500).json({ 
+            error: { 
+                message: `서버 내부 오류: ${error.message}`,
+                details: error.toString()
+            } 
+        });
+    }
+});
+
+// Google Imagen3 API 프록시
+app.post('/api/google/images/generate', async (req, res) => {
+    try {
+        const { authorization } = req.headers;
+        const apiKey = authorization?.replace('Bearer ', '');
+
+        if (!apiKey) {
+            return res.status(401).json({ error: 'Google API 키가 필요합니다.' });
+        }
+
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+
+        // Imagen predict API의 요청 본문 형식
+        const requestBody = {
+            instances: [
+                {
+                    prompt: req.body.prompt
+                }
+            ],
+            parameters: {
+                ...(req.body.config || {})
+            }
+        };
+
+        console.log('Google Imagen3 API 요청 (predict):', {
+            prompt: req.body.prompt?.substring(0, 100) + '...',
+            parameters: requestBody.parameters
+        });
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        const responseText = await response.text();
+
+        if (!response.ok) {
+            console.error('Google Imagen3 API 오류 (predict):', {
+                status: response.status,
+                responseText: responseText
+            });
+            return res.status(response.status).send(responseText);
+        }
+
+        const result = JSON.parse(responseText);
+        console.log('Google Imagen3 API 성공 (predict)');
+        
+        // 결과를 OpenAI 형식과 비슷하게 변환
+        const response_data = {
+            data: result.predictions.map(pred => ({
+                url: `data:image/png;base64,${pred.bytesBase64Encoded}`
+            }))
+        };
+        
+        res.json(response_data);
+
+    } catch (error) {
+        console.error('Google Imagen3 프록시 서버 오류:', error);
+        res.status(500).json({ 
+            error: { 
+                message: `서버 내부 오류: ${error.message}`,
+                details: error.toString()
+            } 
+        });
+    }
+});
+
+// 이미지 생성 프록시 (OpenAI)
 app.post('/api/images/generations', async (req, res) => {
     try {
         const { authorization } = req.headers;
@@ -66,7 +179,8 @@ app.post('/api/images/generations', async (req, res) => {
     }
 });
 
-// 인페인팅 프록시
+// 인페인팅 프록시 (주석 처리 - 임시 비활성화)
+/*
 app.post('/api/images/edits', upload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'mask', maxCount: 1 }
@@ -205,6 +319,7 @@ app.post('/api/images/edits', upload.fields([
         });
     }
 });
+*/
 
 // 이미지 다운로드 프록시 (CORS 해결)
 app.get('/api/download-image', async (req, res) => {
@@ -240,7 +355,12 @@ app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'OK', 
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        features: {
+            openai: true,
+            google_imagen: true,
+            inpainting: false // 임시 비활성화
+        }
     });
 });
 
@@ -265,8 +385,10 @@ app.use((req, res) => {
 
 // 서버 시작
 app.listen(PORT, () => {
-    console.log(`🚀 OpenAI 이미지 생성 프록시 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
+    console.log(`🚀 AI 이미지 생성 프록시 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
     console.log(`📊 건강 체크: http://localhost:${PORT}/api/health`);
+    console.log(`🎨 지원 모델: OpenAI (DALL-E 2, 3, gpt-image-1), Google Imagen 3`);
+    console.log(`⚠️  인페인팅 기능은 현재 비활성화되어 있습니다.`);
 });
 
 // Graceful shutdown
